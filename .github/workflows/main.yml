@@ -6,7 +6,6 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -24,16 +23,31 @@ jobs:
         with:
           go-version: '1.21'
 
+      # 1. Компилируем бинарник вне контейнера
       - name: Build Static Binary
         run: |
           go mod tidy
           CGO_ENABLED=0 GOOS=linux go build -o sandboxd -a -installsuffix cgo .
+
+      # 2. Магия: переводим название репозитория в нижний регистр
+      - name: Lowercase repository name
+        run: |
+          echo "IMAGE_NAME=${GITHUB_REPOSITORY,,}" >> $GITHUB_ENV
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # 3. Собираем и пушим, используя переменную из env
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build and push Docker image
